@@ -1,6 +1,14 @@
+import json
+import runpy
+import subprocess
+from io import BytesIO
 from pathlib import Path
+from unittest.mock import MagicMock
 
+import pytest
 import yaml
+from ansible.errors import AnsibleFilterError
+from jinja2 import Environment, StrictUndefined
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ROLE_DIR = REPO_ROOT / "ansible/roles/native_services"
@@ -24,6 +32,7 @@ def test_native_alloy_configuration_and_service_permissions_are_safe():
         "owner": "root",
         "group": "{{ alloy_native_group }}",
         "mode": "0640",
+        "validate": "/usr/bin/alloy validate %s",
     }
     assert service["ansible.builtin.systemd_service"]["enabled"] is True
     assert service["ansible.builtin.systemd_service"]["state"] == "started"
@@ -31,6 +40,102 @@ def test_native_alloy_configuration_and_service_permissions_are_safe():
         "name": "{{ alloy_native_service_name }}",
         "state": "restarted",
     }
+
+
+def test_independent_journal_probe_observes_other_units_and_keeps_last_good_sample(tmp_path, monkeypatch):
+    probe_path = REPO_ROOT / "ansible/roles/system/files/skynet-alloy-journal-probe.py"
+    main = runpy.run_path(probe_path)["main"]
+    output = tmp_path / "alloy_journal_probe.prom"
+    unit = "skynet-alloy-journal-probe.service"
+    monkeypatch.setitem(main.__globals__, "OUTPUT", output)
+    excluded = [
+        {"UNIT": unit, "MESSAGE": "probe service started"},
+        {"_SYSTEMD_UNIT": unit, "MESSAGE": "probe service output"},
+        {"OBJECT_SYSTEMD_UNIT": "skynet-alloy-journal-probe.timer", "MESSAGE": "probe timer started"},
+        {"CONTAINER_NAME": "jdownloader2", "MESSAGE": "filtered container log"},
+        {"CONTAINER_NAME": "mullvad-browser", "MESSAGE": "filtered container log"},
+        {"_SYSTEMD_UNIT": "example.service"},
+    ]
+    activity = []
+    status = 0
+    suffix = b""
+    errors = [{"MESSAGE": "failed to read journal entry"}, {"MESSAGE": "unrelated notice"}]
+    journal = MagicMock()
+    journal.__enter__.return_value = journal
+    journal.wait.side_effect = lambda: status
+
+    def start_journal(command, *, stdout):
+        assert {"--since=-5min", "--reverse", "--no-tail"} <= set(command)
+        assert stdout == subprocess.PIPE
+        data = b"".join(json.dumps(entry).encode() + b"\n" for entry in activity) + suffix
+        journal.stdout = BytesIO(data)
+        journal.poll.side_effect = lambda: None if journal.stdout.tell() < len(data) else status
+        return journal
+
+    def query(*args):
+        assert "--unit=alloy.service" in args
+        return [json.dumps(entry) for entry in errors]
+
+    monkeypatch.setattr(subprocess, "Popen", start_journal)
+    monkeypatch.setitem(main.__globals__, "query", query)
+    main()
+    assert "skynet_alloy_journal_recent_activity 0\n" in output.read_text()
+
+    activity[:] = excluded
+    main()
+    assert "skynet_alloy_journal_recent_activity 0\n" in output.read_text()
+
+    activity[:] = excluded * 12
+    activity.append({"_SYSTEMD_UNIT": "example.service", "MESSAGE": "forwardable journal entry"})
+    suffix = b"intentionally unread data"
+    main()
+    valid_sample = output.read_text()
+    assert "skynet_alloy_journal_recent_activity 1\n" in valid_sample
+    assert "skynet_alloy_journal_recent_read_errors 1\n" in valid_sample
+    assert not any(message in valid_sample for message in ("failed to read", "unrelated notice", "forwardable journal entry"))
+    journal.kill.assert_called_once()
+
+    activity[:] = excluded
+    suffix = b""
+    status = -9
+    with pytest.raises(subprocess.CalledProcessError) as failure:
+        main()
+    assert failure.value.returncode == -9
+    assert output.read_text() == valid_sample
+
+    status = 0
+    suffix = b'{"MESSAGE":'
+    with pytest.raises(RuntimeError, match="Incomplete journal activity record"):
+        main()
+    assert output.read_text() == valid_sample
+
+
+@pytest.mark.integration  # The Ansible templating import runs a system library lookup.
+def test_native_alloy_optional_prometheus_url_keeps_other_validation():
+    normalize = runpy.run_path(ROLE_DIR / "filter_plugins/native_services.py")["native_services_normalize"]
+    alloy = yaml.safe_load((REPO_ROOT / "ansible/group_vars/all/services/alloy.yml").read_text())
+    native = alloy["alloy"]["targets"]["native"]["native"]
+    config = native["config"]
+
+    config.pop("prometheus_url")
+    assert "prometheus_url" not in normalize(native)
+    for endpoint in ("", "https://prometheus.example.test/api/v1/write"):
+        config["prometheus_url"] = endpoint
+        assert normalize(native)["prometheus_url"] == endpoint
+    for endpoint in (
+        None,
+        False,
+        "http://prometheus.example.test/api/v1/write",
+        "https://@prometheus.example.test/api/v1/write",
+        "https://prometheus.example.test/api/v1/write?source=fixture",
+        "https://prometheus.example.test/api/v1/write#fragment",
+    ):
+        config["prometheus_url"] = endpoint
+        with pytest.raises(AnsibleFilterError, match=r"native.config.prometheus_url"):
+            normalize(native)
+    config.update(prometheus_url="", service_name="")
+    with pytest.raises(AnsibleFilterError, match=r"native.config.service_name"):
+        normalize(native)
 
 
 def test_native_alloy_collects_journal_without_podman_socket_or_root_service_override():
@@ -98,7 +203,20 @@ def test_native_alloy_keeps_privacy_stack_visibility_to_systemd_lifecycle():
     assert "loki.process" not in config
     assert "local.file_match" not in config
     assert "loki.source.file" not in config
-    assert "prometheus." not in config
+    template = Environment(undefined=StrictUndefined).from_string(config)
+    assert "prometheus." not in template.render(alloy_native_loki_url="https://loki.example.test/loki/api/v1/push")
+    monitored = template.render(
+        alloy_native_loki_url="https://loki.example.test/loki/api/v1/push",
+        alloy_native_prometheus_url="https://prometheus.example.test/api/v1/write",
+        inventory_hostname="edge-inventory",
+        ansible_facts={"hostname": "edge-os"},
+    )
+    assert 'prometheus.scrape "native_metrics"' in monitored
+    assert '"127.0.0.1:12345"' in monitored
+    assert 'instance    = "edge-inventory",' in monitored
+    assert "host   = constants.hostname" in monitored
+    assert "https://prometheus.example.test/api/v1/write" in monitored
+    assert "insecure_skip_verify" not in monitored
     assert "output.log" not in config
 
     forbidden_observability_keys = {

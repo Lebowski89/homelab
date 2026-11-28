@@ -3,6 +3,10 @@
 system_packages_enabled: true
 # Opt in on hosts that need a tighter log storage budget.
 system_log_capacity_enabled: false
+# Enable only after auditing traditional log consumers, listeners and forwarding.
+system_journal_only_enabled: false
+# Use the existing Node Exporter textfile collector to observe native Alloy independently.
+system_alloy_journal_probe_enabled: false
 system_sysctl_enabled: true
 system_limits_enabled: true
 system_guest_agent_enabled: true

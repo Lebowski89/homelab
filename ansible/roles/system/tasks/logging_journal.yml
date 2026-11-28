@@ -1,0 +1,163 @@
+---
+
+- name: System | Create the journal configuration drop-in directory
+  ansible.builtin.file:
+    path: /etc/systemd/journald.conf.d
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: System | Configure persistent journal storage limits
+  ansible.builtin.copy:
+    # Ubuntu's package installs syslog.conf, which sorts after numeric drop-ins.
+    dest: /etc/systemd/journald.conf.d/zz-skynet-storage.conf
+    content: |
+      [Journal]
+      Storage=persistent
+      Compress=yes
+      SystemMaxUse=1G
+      SystemKeepFree=5G
+      RuntimeMaxUse=128M
+      {% if system_journal_only_enabled %}
+      ForwardToSyslog=no
+      {% endif %}
+    owner: root
+    group: root
+    mode: '0644'
+  register: system_journal_limits
+
+- name: System | Retire the previous managed journal drop-in
+  ansible.builtin.file:
+    path: /etc/systemd/journald.conf.d/60-skynet-storage.conf
+    state: absent
+  register: system_journal_legacy_limits
+
+- name: System | Read effective journal configuration before retiring syslog
+  when:
+    - system_journal_only_enabled
+    - not ansible_check_mode
+  ansible.builtin.command:
+    argv: [/usr/bin/systemd-analyze, cat-config, systemd/journald.conf]
+  register: system_journal_config
+  changed_when: false
+
+- name: System | Require the managed forwarding setting to win
+  when:
+    - system_journal_only_enabled
+    - not ansible_check_mode
+  ansible.builtin.assert:
+    that:
+      - >-
+        (system_journal_config.stdout_lines | select('match', '^\s*ForwardToSyslog\s*=')
+        | last | default('') | regex_replace('^\s*ForwardToSyslog\s*=\s*', '') | trim) == 'no'
+    fail_msg: A later journald drop-in overrides ForwardToSyslog=no. Resolve that setting before retiring rsyslog.
+
+- name: System | Compare installed journal settings with the last applied copy
+  ansible.builtin.stat:
+    path: "{{ system_journal_settings_path }}"
+  loop:
+    - /etc/systemd/journald.conf.d/zz-skynet-storage.conf
+    - /var/lib/skynet-journald-storage.applied
+  loop_control:
+    loop_var: system_journal_settings_path
+  register: system_journal_settings
+
+- name: System | Apply persistent journal limits
+  when:
+    - not ansible_check_mode
+    - >-
+      system_journal_limits.changed
+      or system_journal_legacy_limits.changed
+      or (system_journal_settings.results[1].stat.checksum | default(''))
+      != system_journal_settings.results[0].stat.checksum
+  ansible.builtin.systemd_service:
+    name: systemd-journald.service
+    state: restarted
+
+# Flush is idempotent and creates persistent storage when needed.
+- name: System | Flush the journal to persistent storage
+  when: not ansible_check_mode
+  ansible.builtin.command:
+    argv: [/usr/bin/journalctl, --flush]
+  changed_when: false
+
+- name: System | Record journal configuration only after activation and flush
+  when: not ansible_check_mode
+  ansible.builtin.copy:
+    src: /etc/systemd/journald.conf.d/zz-skynet-storage.conf
+    dest: /var/lib/skynet-journald-storage.applied
+    remote_src: true
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: System | Discover the local syslog service
+  when: system_journal_only_enabled
+  ansible.builtin.service_facts:
+
+- name: System | Inspect active and retained rsyslog rotation configurations
+  when: system_journal_only_enabled
+  ansible.builtin.stat:
+    path: "{{ system_rsyslog_rotation_path }}"
+    follow: false
+  loop:
+    - /etc/logrotate.d/rsyslog
+    - /etc/rsyslog.logrotate.skynet-retired
+  loop_control:
+    loop_var: system_rsyslog_rotation_path
+  register: system_rsyslog_rotation
+
+- name: System | Retain the legacy rotation configuration without running its reopen hook
+  when:
+    - system_journal_only_enabled
+    - system_rsyslog_rotation.results[0].stat.exists
+  vars:
+    system_rsyslog_active_rule: "{{ system_rsyslog_rotation.results[0].stat }}"
+    system_rsyslog_retained_rule: "{{ system_rsyslog_rotation.results[1].stat }}"
+  block:
+    - name: System | Require an unconflicted legacy rotation file
+      ansible.builtin.assert:
+        that:
+          - system_rsyslog_active_rule.isreg
+          - system_rsyslog_active_rule.uid == 0
+          - >-
+            not system_rsyslog_retained_rule.exists or
+            (system_rsyslog_retained_rule.isreg and system_rsyslog_retained_rule.uid == 0
+             and system_rsyslog_retained_rule.checksum == system_rsyslog_active_rule.checksum)
+        fail_msg: Conflicting rsyslog logrotate files require operator review before syslog retirement.
+
+    - name: System | Preserve the exact legacy rule outside logrotate's include directory
+      ansible.builtin.copy:
+        src: /etc/logrotate.d/rsyslog
+        dest: /etc/rsyslog.logrotate.skynet-retired
+        remote_src: true
+        force: false
+        owner: root
+        group: root
+        mode: preserve
+
+    - name: System | Remove the saved legacy rule from logrotate scheduling
+      ansible.builtin.file:
+        path: /etc/logrotate.d/rsyslog
+        state: absent
+  rescue:
+    - name: System | Stop before retiring rsyslog if its logrotate configuration could not be secured
+      ansible.builtin.fail:
+        msg: Could not preserve and withdraw the rsyslog rotation rule. Inspect the two managed configuration paths.
+
+- name: System | Retire redundant syslog storage after activating journald
+  when:
+    - system_journal_only_enabled
+    - not ansible_check_mode
+    - "'rsyslog.service' in ansible_facts.services"
+  ansible.builtin.systemd_service:
+    name: rsyslog.service
+    state: stopped
+    enabled: false
+    # A disabled unit can still be activated by syslog.socket.
+    masked: true
+
+- name: System | Configure the independent native Alloy journal probe
+  when: system_alloy_journal_probe_enabled
+  ansible.builtin.import_tasks: logging_alloy_probe.yml

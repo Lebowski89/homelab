@@ -55,3 +55,31 @@ loki.source.journal "system" {
   relabel_rules = discovery.relabel.journal.rules
   forward_to    = [loki.write.default.receiver]
 }
+{% if alloy_native_prometheus_url | default('') %}
+
+prometheus.scrape "native_metrics" {
+  targets = [{
+    __address__ = "127.0.0.1:12345",
+    instance    = {{ inventory_hostname | tojson }},
+  }]
+  job_name        = "alloy-native"
+  scrape_interval = "30s"
+  forward_to      = [prometheus.relabel.native_metrics.receiver]
+}
+
+prometheus.relabel "native_metrics" {
+  forward_to = [prometheus.remote_write.native_metrics.receiver]
+
+  rule {
+    source_labels = ["__name__"]
+    regex         = "up|loki_source_journal_target_(lines|parsing_errors)_total|loki_write_(sent_entries|dropped_entries|batch_retries)_total"
+    action        = "keep"
+  }
+}
+
+prometheus.remote_write "native_metrics" {
+  endpoint {
+    url = {{ alloy_native_prometheus_url | tojson }}
+  }
+}
+{% endif %}

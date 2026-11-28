@@ -472,7 +472,7 @@ def test_selected_service_preserves_target_overrides_and_handler_isolation(nativ
     managed = set()
     for call in calls:
         destination = call["options"].get("dest", "")
-        if call["module"] == "template" or destination == "/etc/systemd/resolved.conf.d/technitium.conf":
+        if call["module"] == "template" or (call["module"] == "copy" and destination.endswith(".conf")):
             managed.add(destination)
         if call["module"] == "copy" and destination.endswith(".json"):
             assert set(json.loads(call["options"]["content"])["files"]) <= managed
@@ -491,6 +491,7 @@ def test_selected_service_preserves_target_overrides_and_handler_isolation(nativ
     if entry == "alloy":
         assert templates[0]["options"]["dest"] == "/fixture/alloy/config"
         assert "https://loki.private.example.test:9443/loki/api/v1/push" in templates[0]["content"]
+        assert 'instance    = "selected",' in templates[0]["content"]
         user = next(call["options"] for call in calls if call["module"] == "user")
         assert user["name"] == "fixture-alloy" and user["append"] is True
         assert user["groups"] == ["systemd-journal"]
@@ -530,6 +531,7 @@ def test_multiple_services_keep_their_defaults_and_handlers(native_run):
         list(ENTRIES),
         overrides={
             "alloy_native_loki_url": "https://logs.example.test/push",
+            "alloy_native_prometheus_url": "",
             "services_internal_zone": "{{ unused_native_zone }}",
             "services_private_https_port": "{{ unused_native_port }}",
         },
@@ -541,6 +543,7 @@ def test_multiple_services_keep_their_defaults_and_handlers(native_run):
         call["content"] for call in calls if call["module"] == "template" and call["options"]["dest"] == "/fixture/alloy/config"
     )
     assert "https://logs.example.test/push" in alloy_config
+    assert "prometheus.remote_write" not in alloy_config
 
 
 def test_fresh_alloy_check_mode_defers_package_account_work(native_run):
@@ -808,7 +811,7 @@ def test_alloy_selects_signed_platform_repository_and_preserves_update_policy(na
     assert user["groups"] == ["systemd-journal"] and user["append"] is True
     assert not any(call["module"] == "group" for call in calls)
     services = [call["options"] for call in calls if call["module"] == "systemd_service" and not call["handler"]]
-    assert services == [{"name": "fixture-alloyd", "enabled": True, "state": "started"}]
+    assert services == [{"name": "fixture-alloyd", "enabled": True, "state": "started", "daemon_reload": True}]
 
 
 def test_alloy_preserves_rpm_repository_and_package_overrides(native_run):

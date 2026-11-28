@@ -14,6 +14,7 @@ alloy_native_config_dir: '{{ native_services_config.config_dir }}'
 alloy_native_config_path: '{{ native_services_config.config_path }}'
 alloy_native_journal_groups: '{{ native_services_config.journal_groups }}'
 alloy_native_loki_url: '{{ native_services_config.loki_url }}'
+alloy_native_prometheus_url: "{{ native_services_config.prometheus_url | default('') }}"
 
 # RPM repository settings are platform installation inputs, not service fields.
 # Existing catalogue repository/keyring settings remain specific to APT.
