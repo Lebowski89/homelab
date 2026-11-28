@@ -9,7 +9,9 @@ import tempfile
 import time
 from pathlib import Path
 
-UNIT = "skynet-alloy-journal-probe.service"
+PROBE_UNITS = ("skynet-alloy-journal-probe.service", "skynet-alloy-journal-probe.timer")
+# Match the container exclusions in the native Alloy journal configuration.
+PRIVATE_CONTAINERS = ("jdownloader2", "mullvad-browser")
 OUTPUT = Path("/var/lib/node_exporter/textfile_collector/alloy_journal_probe.prom")
 READ_ERROR = re.compile(
     r"failed to read journal entry|failed waiting for journal entry|sd_journal_next failed|error creating journal tailer"
@@ -27,9 +29,15 @@ def query(*args):
 
 
 def sample():
-    recent = query("--lines=64", "--output-fields=UNIT,_SYSTEMD_UNIT")
-    # The timer itself must not supply the expected traffic on an otherwise idle host.
-    active = any(UNIT not in (entry.get("UNIT"), entry.get("_SYSTEMD_UNIT")) for entry in map(json.loads, recent))
+    unit_fields = ("UNIT", "_SYSTEMD_UNIT", "OBJECT_SYSTEMD_UNIT")
+    recent = query("--lines=64", f"--output-fields={','.join(unit_fields)},CONTAINER_NAME,MESSAGE")
+    # Count only evidence of demand that the collector could actually forward.
+    active = any(
+        entry.get("MESSAGE")
+        and entry.get("CONTAINER_NAME") not in PRIVATE_CONTAINERS
+        and all(entry.get(field) not in PROBE_UNITS for field in unit_fields)
+        for entry in map(json.loads, recent)
+    )
     # Read only this unit's recent messages. Never publish their contents.
     messages = query("--unit=alloy.service", "--output-fields=MESSAGE", "--lines=6000")
     errors = sum(

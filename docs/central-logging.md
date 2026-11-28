@@ -194,11 +194,18 @@ Retain journal files and Alloy positions for diagnosis.
 
 Alloy scrapes its existing loopback endpoint and remote-writes only journal
 and Loki delivery counters and scrape availability over the existing internal
-Prometheus HTTPS route. `system_alloy_journal_probe_enabled` adds an independent
+Prometheus HTTPS route. Set `alloy_native_prometheus_url: ""` in a host's
+inventory variables to opt out of metrics delivery. A nonempty endpoint must
+use verified HTTPS. Prometheus uses the native Alloy catalogue placement and
+per-host settings to distinguish a service that should run from a host that
+should also send metrics.
+
+`system_alloy_journal_probe_enabled` adds an independent
 observation using the standard native Node Exporter account and textfile
 collector. The probe publishes only counts, activity and freshness. It detects
 journal read failures that the Alloy parsing counter does not cover. A stalled
-reader alert requires recent independent journal activity; a stalled delivery
+reader alert requires recent forwardable activity. The probe excludes private
+container logs, empty messages and its own timer and service. A stalled delivery
 alert requires lines read without entries sent. A quiet host does not fire
 either. Use the `collector=alloy-native` alerts and inspect
 `alloy.service` and `skynet-alloy-journal-probe.service` locally. The

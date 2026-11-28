@@ -232,27 +232,34 @@ groups:
     rules:
       - alert: NativeAlloyUnavailable
         expr: |
-          (
-            node_systemd_unit_state{job="node-exporter",name="alloy.service",state="active"} == 1
-            or on(instance) up{job="node-exporter",instance="{{ services_controller_host }}"} == 1
+          label_replace(
+            up{job="node-exporter",alloy_native_unit!=""} == 1,
+            "name", "$1", "alloy_native_unit", "(.+)"
           )
-          unless on(instance) (
-            up{job="alloy-native"} == 1
-            and on(instance) loki_source_journal_target_lines_total{job="alloy-native"}
-            and on(instance) loki_write_sent_entries_total{job="alloy-native"}
-          )
-          or on(instance) node_systemd_unit_state{job="node-exporter",name="alloy.service",state=~"inactive|failed"} == 1
+          unless on(instance, name) node_systemd_unit_state{job="node-exporter",state="active"} == 1
         for: 5m
         labels:
           severity: warning
           collector: alloy-native
         annotations:
-          summary: "Native Alloy metrics missing or service inactive on {{ '{{' }} $labels.instance {{ '}}' }}"
+          summary: "Native Alloy service unavailable on {{ '{{' }} $labels.instance {{ '}}' }}"
+          priority: "6"
+
+      - alert: NativeAlloyMetricsMissing
+        expr: |
+          up{job="node-exporter",alloy_native_metrics_expected="true"}
+          unless on(instance) up{job="alloy-native"} == 1
+        for: 5m
+        labels:
+          severity: warning
+          collector: alloy-native
+        annotations:
+          summary: "Native Alloy metrics missing on {{ '{{' }} $labels.instance {{ '}}' }}"
           priority: "6"
 
       - alert: NativeAlloyJournalProbeMissing
         expr: |
-          up{job="node-exporter",instance="{{ services_controller_host }}"} == 1
+          up{job="node-exporter",alloy_journal_probe_expected="true"} == 1
           unless on(instance) (time() - skynet_alloy_journal_probe_timestamp_seconds{job="node-exporter"} < 300)
         for: 5m
         labels:

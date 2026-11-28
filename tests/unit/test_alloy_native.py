@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 import yaml
+from ansible.errors import AnsibleFilterError
 from jinja2 import Environment, StrictUndefined
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -44,7 +45,14 @@ def test_independent_journal_probe_observes_other_units_and_keeps_last_good_samp
     output = tmp_path / "alloy_journal_probe.prom"
     unit = "skynet-alloy-journal-probe.service"
     monkeypatch.setitem(main.__globals__, "OUTPUT", output)
-    activity = [{"UNIT": unit}, {"_SYSTEMD_UNIT": unit}]
+    activity = [
+        {"UNIT": unit, "MESSAGE": "probe service started"},
+        {"_SYSTEMD_UNIT": unit, "MESSAGE": "probe service output"},
+        {"OBJECT_SYSTEMD_UNIT": "skynet-alloy-journal-probe.timer", "MESSAGE": "probe timer started"},
+        {"CONTAINER_NAME": "jdownloader2", "MESSAGE": "filtered container log"},
+        {"CONTAINER_NAME": "mullvad-browser", "MESSAGE": "filtered container log"},
+        {"_SYSTEMD_UNIT": "example.service"},
+    ]
     errors = [{"MESSAGE": "failed to read journal entry"}, {"MESSAGE": "unrelated notice"}]
 
     def query(*args):
@@ -53,7 +61,7 @@ def test_independent_journal_probe_observes_other_units_and_keeps_last_good_samp
     monkeypatch.setitem(main.__globals__, "query", query)
     main()
     assert "skynet_alloy_journal_recent_activity 0\n" in output.read_text()
-    activity.append({"_SYSTEMD_UNIT": "example.service"})
+    activity.append({"_SYSTEMD_UNIT": "example.service", "MESSAGE": "forwardable journal entry"})
     main()
     valid_sample = output.read_text()
     assert "skynet_alloy_journal_recent_activity 1\n" in valid_sample
@@ -67,6 +75,34 @@ def test_independent_journal_probe_observes_other_units_and_keeps_last_good_samp
     with pytest.raises(RuntimeError, match="journal unavailable"):
         main()
     assert output.read_text() == valid_sample
+
+
+@pytest.mark.integration  # The Ansible templating import runs a system library lookup.
+def test_native_alloy_optional_prometheus_url_keeps_other_validation():
+    normalize = runpy.run_path(ROLE_DIR / "filter_plugins/native_services.py")["native_services_normalize"]
+    alloy = yaml.safe_load((REPO_ROOT / "ansible/group_vars/all/services/alloy.yml").read_text())
+    native = alloy["alloy"]["targets"]["native"]["native"]
+    config = native["config"]
+
+    config.pop("prometheus_url")
+    assert "prometheus_url" not in normalize(native)
+    for endpoint in ("", "https://prometheus.example.test/api/v1/write"):
+        config["prometheus_url"] = endpoint
+        assert normalize(native)["prometheus_url"] == endpoint
+    for endpoint in (
+        None,
+        False,
+        "http://prometheus.example.test/api/v1/write",
+        "https://@prometheus.example.test/api/v1/write",
+        "https://prometheus.example.test/api/v1/write?source=fixture",
+        "https://prometheus.example.test/api/v1/write#fragment",
+    ):
+        config["prometheus_url"] = endpoint
+        with pytest.raises(AnsibleFilterError, match=r"native.config.prometheus_url"):
+            normalize(native)
+    config.update(prometheus_url="", service_name="")
+    with pytest.raises(AnsibleFilterError, match=r"native.config.service_name"):
+        normalize(native)
 
 
 def test_native_alloy_collects_journal_without_podman_socket_or_root_service_override():

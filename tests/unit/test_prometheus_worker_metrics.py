@@ -1,5 +1,6 @@
 """Render the real transition paths without changing existing scrape identities."""
 
+import runpy
 from copy import deepcopy
 from pathlib import Path
 
@@ -11,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[2]
 TEMPLATES = ROOT / "ansible/roles/service_common/templates"
 
 
-def render(runtime, **overrides):
+def render(runtime, *, hostvars=None, groups=None, **overrides):
     cfg = yaml.safe_load((ROOT / "ansible/group_vars/all/services/prometheus.yml").read_text())["prometheus"]
     cfg = deepcopy(cfg)
     cfg["runtime"] = runtime
@@ -22,13 +23,49 @@ def render(runtime, **overrides):
             services_controller_host="manager",
             services_internal_zone="internal.example",
             services_private_https_port=8443,
-            hostvars={"manager": {"local_ip": "192.0.2.48"}},
-            groups={},
+            hostvars=hostvars if hostvars is not None else {"manager": {"local_ip": "192.0.2.48"}},
+            groups=groups if groups is not None else {},
             prometheus_blackbox_exporter_address="192.0.2.20:22622",
             prometheus_worker_metrics_address="192.0.2.20:22623",
             **overrides,
         )
     )
+
+
+def test_node_exporter_targets_distinguish_native_alloy_and_metrics_expectations():
+    catalog = yaml.safe_load((ROOT / "ansible/group_vars/all/services/alloy.yml").read_text())
+    catalog_effective = runpy.run_path(ROOT / "ansible/filter_plugins/service_catalog.py")["service_catalog_effective"]
+    hostvars = {
+        "manager": {
+            "local_ip": "192.0.2.48",
+            "system_log_capacity_enabled": True,
+            "system_alloy_journal_probe_enabled": True,
+        },
+        "optout": {
+            "local_ip": "192.0.2.49",
+            "alloy_native_prometheus_url": "",
+            "alloy_native_service_name": "override-alloy.service",
+        },
+        "other": {"local_ip": "192.0.2.50", "system_alloy_journal_probe_enabled": True},
+    }
+    groups = {"tags_podman": ["manager", "optout"], "tags_node_exporter": list(hostvars)}
+    config = render(
+        "podman",
+        hostvars=hostvars,
+        groups=groups,
+        svcfiles=catalog,
+        service_catalog_effective=catalog_effective(catalog, "manager", groups, True),
+        prometheus_node_exporter_inventory_groups=["tags_node_exporter"],
+    )
+    node_job = next(job for job in config["scrape_configs"] if job["job_name"] == "node-exporter")
+    labels = {target["labels"]["instance"]: target["labels"] for target in node_job["static_configs"]}
+
+    assert labels["manager"]["alloy_native_unit"] == "alloy.service"
+    assert labels["manager"]["alloy_native_metrics_expected"] == "true"
+    assert labels["manager"]["alloy_journal_probe_expected"] == "true"
+    assert labels["optout"]["alloy_native_unit"] == "override-alloy.service"
+    assert "alloy_native_metrics_expected" not in labels["optout"]
+    assert set(labels["other"]) == {"instance", "source"}
 
 
 def test_transition_preserves_unique_jobs_labels_and_unrelated_scrape_definitions():

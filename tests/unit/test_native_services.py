@@ -530,6 +530,7 @@ def test_multiple_services_keep_their_defaults_and_handlers(native_run):
         list(ENTRIES),
         overrides={
             "alloy_native_loki_url": "https://logs.example.test/push",
+            "alloy_native_prometheus_url": "",
             "services_internal_zone": "{{ unused_native_zone }}",
             "services_private_https_port": "{{ unused_native_port }}",
         },
@@ -541,6 +542,7 @@ def test_multiple_services_keep_their_defaults_and_handlers(native_run):
         call["content"] for call in calls if call["module"] == "template" and call["options"]["dest"] == "/fixture/alloy/config"
     )
     assert "https://logs.example.test/push" in alloy_config
+    assert "prometheus.remote_write" not in alloy_config
 
 
 def test_fresh_alloy_check_mode_defers_package_account_work(native_run):

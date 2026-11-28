@@ -15,6 +15,7 @@ def task_named(tasks, name):
 
 
 def test_node_memory_pressure_and_kernel_oom_alerts_are_host_wide_and_actionable():
+    # Inventory expectations are scrape target labels. Rule files render independently.
     rendered = Environment(undefined=StrictUndefined).from_string(NODE_RULES_PATH.read_text()).render()
     rules = {rule["alert"]: rule for rule in yaml.safe_load(rendered)["groups"][0]["rules"]}
 

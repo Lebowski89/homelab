@@ -67,7 +67,15 @@ scrape_configs:
   - job_name: "node-exporter"
     scrape_interval: 30s
     scrape_timeout: 10s
+    # The expectations belong on the synthetic up metric, which skips metric relabeling.
+    metric_relabel_configs:
+      - action: labeldrop
+        regex: "alloy_native_unit|alloy_native_metrics_expected|alloy_journal_probe_expected"
     static_configs:
+{% set alloy = service_catalog_effective | default([])
+              | selectattr('name', 'equalto', 'alloy') | selectattr('target', 'defined')
+              | selectattr('target', 'equalto', 'native') | selectattr('runtime', 'equalto', 'native')
+              | selectattr('enabled') | first | default({}) %}
 {% set ns = namespace(hosts=[]) %}
 {% for inventory_group in prometheus_node_exporter_inventory_groups | default([]) %}
 {% for host in groups.get(inventory_group, []) %}
@@ -83,6 +91,22 @@ scrape_configs:
         labels:
           instance: "{{ host }}"
           source: "netbox"
+{% if host in (alloy.resolved_hosts | default([])) %}
+{% set native_config = svcfiles.alloy.targets.native.native.config %}
+{% set unit = hostvars[host].alloy_native_service_name | default(native_config.service_name) %}
+          alloy_native_unit: {{ (unit if unit.endswith('.service') else unit ~ '.service') | tojson }}
+{% if hostvars[host].alloy_native_prometheus_url is defined %}
+{% set endpoint = hostvars[host].alloy_native_prometheus_url %}
+{% else %}
+{% set endpoint = native_config.prometheus_url | default('') %}
+{% endif %}
+{% if endpoint %}
+          alloy_native_metrics_expected: "true"
+{% endif %}
+{% endif %}
+{% if (hostvars[host].system_log_capacity_enabled | default(false)) and (hostvars[host].system_alloy_journal_probe_enabled | default(false)) %}
+          alloy_journal_probe_expected: "true"
+{% endif %}
 {% endif %}
 {% endfor %}
 
