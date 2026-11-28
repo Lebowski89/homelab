@@ -246,6 +246,7 @@ def test_infisical_lookup_sites_are_explicit_and_adapter_free():
     orchestration_files = [path for path in production_files if "ansible/collections/" not in path.as_posix()]
     lookup_sites = [path for path in orchestration_files if "infisical.vault.read_secrets" in path.read_text()]
     assert set(lookup_sites) == {
+        Path("ansible/operations/technitium-logging.yml"),
         Path("ansible/roles/service_common/tasks/infisical.yml"),
         Path("ansible/roles/postgres/tasks/sub_tasks/backup_remote_setup.yml"),
     }
